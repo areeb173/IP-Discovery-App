@@ -130,19 +130,23 @@ def main():
     keywords = load_keywords()
     if not keywords:
         print("No keywords loaded. Please check keywords.txt")
+        input("Press Enter to exit...")
         return
 
     scan_path = input("Enter directory path to scan: ").strip()
 
     if not os.path.exists(scan_path):
         print("Error: Directory does not exist.")
+        input("Press Enter to exit...")
         return
 
     if not os.path.isdir(scan_path):
         print("Error: Path is not a directory.")
+        input("Press Enter to exit...")
         return
 
     scan_local_directory(scan_path, keywords)
+    input("\nPress Enter to exit...")
 
 if __name__ == "__main__":
     main()
