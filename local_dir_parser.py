@@ -28,16 +28,26 @@ def load_keywords():
 
 # send a prompt to Ollama api and return its text response
 def query_ollama(prompt):
+    # attempt to call the Ollama server; return empty string on failure
     data = {
-        "model": "gemma3",
+        "model": "gemma3:4b",
         "prompt": prompt,
         "stream": False
     }
     try:
         req = urllib.request.Request(OLLAMA_URL, data=json.dumps(data).encode('utf-8'), headers={'Content-Type': 'application/json'})
         with urllib.request.urlopen(req) as response:
+            if response.status == 404:
+                print("Ollama server returned 404. Ensure the API path and server are correct.")
+                return ""
             result = json.loads(response.read().decode('utf-8'))
             return result.get('response', '').strip()
+    except urllib.error.HTTPError as e:
+        if e.code == 404:
+            print("Ollama endpoint not found (404). Is the server running and model available?")
+        else:
+            print(f"HTTP error from Ollama: {e.code} - {e.reason}")
+        return ""
     except Exception as e:
         print(f"Error querying Ollama: {e}")
         return ""
@@ -46,7 +56,7 @@ def query_ollama(prompt):
 def is_invention_like(text):
     prompt = f"Does this text describe an invention or patentable idea? Answer only 'yes' or 'no'.\n\nText:\n{text[:2000]}"  # Limit text to 2000 chars
     response = query_ollama(prompt)
-    return response.lower() == 'yes'
+    return response.lower().startswith('yes')
 
 # read and return contents of a file, ignoring errors
 def extract_text_from_file(file_path):
@@ -61,8 +71,14 @@ def extract_text_from_file(file_path):
 def check_for_potential_ip(text, keywords):
     text_lower = text.lower()
     matching_keywords = [kw for kw in keywords if kw in text_lower]
-    if matching_keywords and is_invention_like(text):
-        return matching_keywords
+    if matching_keywords:
+        # extract snippet around first keyword match for more efficient LLM evaluation
+        first_kw = matching_keywords[0]
+        kw_pos = text_lower.find(first_kw)
+        start = max(0, kw_pos - 150)
+        snippet = text[start:start + 300]
+        if is_invention_like(snippet):
+            return matching_keywords
     return []
 
 # walk through directory tree, analyze each supported file
