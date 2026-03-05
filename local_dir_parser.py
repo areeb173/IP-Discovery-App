@@ -8,6 +8,19 @@ SUPPORTED_EXTENSIONS = {
 
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 mb can be lowered/increased
 
+KEYWORDS_FILE = "keywords.txt"
+
+def load_keywords():
+    keywords = set()
+    try:
+        with open(KEYWORDS_FILE, "r", encoding="utf-8") as f:
+            for line in f:
+                word = line.strip().lower()
+                if word:
+                    keywords.add(word)
+    except Exception as e:
+        print(f"Error loading keywords: {e}")
+    return keywords
 
 def extract_text_from_file(file_path):
     try:
@@ -17,11 +30,16 @@ def extract_text_from_file(file_path):
         print(f"Error reading {file_path}: {e}")
         return ""
 
+def check_for_potential_ip(text, keywords):
+    text_lower = text.lower()
+    matching_keywords = [kw for kw in keywords if kw in text_lower]
+    return matching_keywords
 
-def scan_local_directory(scan_path):
+def scan_local_directory(scan_path, keywords):
     parsed_files = 0
     total_characters = 0
     skipped_large_files = 0
+    potential_ip_files = []
 
     print(f"\nScanning directory: {scan_path}\n")
 
@@ -49,14 +67,29 @@ def scan_local_directory(scan_path):
 
                     print(f"Parsed: {file_path}")
                     print(f"Size: {file_size} bytes")
-                    print(f"Characters: {len(text)}\n")
+                    print(f"Characters: {len(text)}")
+
+                    matching_keywords = check_for_potential_ip(text, keywords)
+                    if matching_keywords:
+                        print(f"Potential IP found! Matching keywords: {', '.join(matching_keywords)}")
+                        potential_ip_files.append((file_path, matching_keywords))
+                    print()
 
     print(f"Total Parsed Files: {parsed_files}")
     print(f"Total Characters Extracted: {total_characters}")
     print(f"Skipped Large Files: {skipped_large_files}")
-
+    print(f"Potential IP Files: {len(potential_ip_files)}")
+    if potential_ip_files:
+        print("\nPotential IP Files:")
+        for file_path, keywords in potential_ip_files:
+            print(f"- {file_path}: {', '.join(keywords)}")
 
 def main():
+    keywords = load_keywords()
+    if not keywords:
+        print("No keywords loaded. Please check keywords.txt")
+        return
+
     scan_path = input("Enter directory path to scan: ").strip()
 
     if not os.path.exists(scan_path):
@@ -67,8 +100,7 @@ def main():
         print("Error: Path is not a directory.")
         return
 
-    scan_local_directory(scan_path)
-
+    scan_local_directory(scan_path, keywords)
 
 if __name__ == "__main__":
     main()
