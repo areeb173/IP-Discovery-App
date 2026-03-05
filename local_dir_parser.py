@@ -1,4 +1,6 @@
 import os
+import urllib.request
+import json
 
 SUPPORTED_EXTENSIONS = {
     ".py", ".js", ".ts", ".java", ".cs",
@@ -9,7 +11,9 @@ SUPPORTED_EXTENSIONS = {
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 mb can be lowered/increased
 
 KEYWORDS_FILE = "keywords.txt"
+OLLAMA_URL = "http://localhost:11434/api/generate"
 
+# read keyword list from file into a set for quick lookup
 def load_keywords():
     keywords = set()
     try:
@@ -22,6 +26,29 @@ def load_keywords():
         print(f"Error loading keywords: {e}")
     return keywords
 
+# send a prompt to Ollama api and return its text response
+def query_ollama(prompt):
+    data = {
+        "model": "gemma3",
+        "prompt": prompt,
+        "stream": False
+    }
+    try:
+        req = urllib.request.Request(OLLAMA_URL, data=json.dumps(data).encode('utf-8'), headers={'Content-Type': 'application/json'})
+        with urllib.request.urlopen(req) as response:
+            result = json.loads(response.read().decode('utf-8'))
+            return result.get('response', '').strip()
+    except Exception as e:
+        print(f"Error querying Ollama: {e}")
+        return ""
+
+# ask the LLM whether the text seems like a patentable idea
+def is_invention_like(text):
+    prompt = f"Does this text describe an invention or patentable idea? Answer only 'yes' or 'no'.\n\nText:\n{text[:2000]}"  # Limit text to 2000 chars
+    response = query_ollama(prompt)
+    return response.lower() == 'yes'
+
+# read and return contents of a file, ignoring errors
 def extract_text_from_file(file_path):
     try:
         with open(file_path, "r", encoding="utf-8", errors="ignore") as f:
@@ -30,14 +57,17 @@ def extract_text_from_file(file_path):
         print(f"Error reading {file_path}: {e}")
         return ""
 
+# determine if text contains keywords and is judged invention-like
 def check_for_potential_ip(text, keywords):
     text_lower = text.lower()
     matching_keywords = [kw for kw in keywords if kw in text_lower]
-    return matching_keywords
+    if matching_keywords and is_invention_like(text):
+        return matching_keywords
+    return []
 
+# walk through directory tree, analyze each supported file
 def scan_local_directory(scan_path, keywords):
     parsed_files = 0
-    total_characters = 0
     skipped_large_files = 0
     potential_ip_files = []
 
@@ -63,11 +93,8 @@ def scan_local_directory(scan_path, keywords):
 
                 if text.strip():
                     parsed_files += 1
-                    total_characters += len(text)
 
                     print(f"Parsed: {file_path}")
-                    print(f"Size: {file_size} bytes")
-                    print(f"Characters: {len(text)}")
 
                     matching_keywords = check_for_potential_ip(text, keywords)
                     if matching_keywords:
@@ -76,7 +103,6 @@ def scan_local_directory(scan_path, keywords):
                     print()
 
     print(f"Total Parsed Files: {parsed_files}")
-    print(f"Total Characters Extracted: {total_characters}")
     print(f"Skipped Large Files: {skipped_large_files}")
     print(f"Potential IP Files: {len(potential_ip_files)}")
     if potential_ip_files:
