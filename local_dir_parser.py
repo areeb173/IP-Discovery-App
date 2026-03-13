@@ -112,17 +112,13 @@ def extract_text_from_file(file_path):
 def check_for_potential_ip(text, keywords):
     text_lower = text.lower()
     matching_keywords = [kw for kw in keywords if kw in text_lower]
-    if matching_keywords:
-        # extract snippet around first keyword match for more efficient LLM evaluation
 
     if matching_keywords:
         first_kw = matching_keywords[0]
         kw_pos = text_lower.find(first_kw)
+
         start = max(0, kw_pos - 150)
         snippet = text[start:start + 300]
-        if is_invention_like(snippet):
-            return matching_keywords
-    return []
 
         if is_invention_like(snippet):
             score_data = score_invention(snippet, matching_keywords)
@@ -140,7 +136,6 @@ def scan_local_directory(scan_path, keywords):
     skipped_large_files = 0
     potential_ip_files = []
 
-    print(f"\nScanning directory: {scan_path}\n")
     print(f"\nScanning directory: {scan_path}\n")
     start_time = time.time()
 
@@ -164,21 +159,17 @@ def scan_local_directory(scan_path, keywords):
 
                 if text.strip():
                     parsed_files += 1
-
                     print(f"Parsed: {file_path}")
 
-                    matching_keywords = check_for_potential_ip(text, keywords)
-                    if matching_keywords:
-                        print(f"Potential IP found! Matching keywords: {', '.join(matching_keywords)}")
-                        potential_ip_files.append((file_path, matching_keywords))
-                    print()
                     result = check_for_potential_ip(text, keywords)
+
                     if result:
-                        print(f"Potential IP found!")
+                        print("Potential IP found!")
                         print(f"Matching keywords: {', '.join(result['keywords'])}")
                         print(f"Score: {result['score_data'].get('score', 0)}")
                         print(f"Type: {result['score_data'].get('ip_type', 'none')}")
                         print(f"Summary: {result['score_data'].get('summary', '')}")
+                        print()
 
                         potential_ip_files.append({
                             "file_path": file_path,
@@ -189,15 +180,11 @@ def scan_local_directory(scan_path, keywords):
                             "summary": result["score_data"].get("summary", ""),
                             "reasoning": result["score_data"].get("reasoning", "")
                         })
-                        print()
 
     print(f"Total Parsed Files: {parsed_files}")
     print(f"Skipped Large Files: {skipped_large_files}")
     print(f"Potential IP Files: {len(potential_ip_files)}")
-    if potential_ip_files:
-        print("\nPotential IP Files:")
-        for file_path, keywords in potential_ip_files:
-            print(f"- {file_path}: {', '.join(keywords)}")
+
     end_time = time.time()
     total_time = end_time - start_time
 
@@ -206,6 +193,7 @@ def scan_local_directory(scan_path, keywords):
     if parsed_files > 0:
         avg_time = total_time / parsed_files
         print(f"Average time per file: {avg_time:.4f} seconds")
+
     if potential_ip_files:
         print("\nPotential IP Files:")
         for item in potential_ip_files:
