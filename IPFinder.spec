@@ -1,12 +1,19 @@
 # -*- mode: python ; coding: utf-8 -*-
 
-
 a = Analysis(
-    ['local_dir_parser.py'],
+    ['server.py'],
     pathex=[],
     binaries=[],
-    datas=[('keywords.txt', '.')],
-    hiddenimports=[],
+    datas=[
+        ('keywords.txt', '.'),
+        ('frontend/dist', 'frontend/dist'),
+    ],
+    hiddenimports=[
+        'flask',
+        'flask_cors',
+        'engineio',
+        'uuid',
+    ],
     hookspath=[],
     hooksconfig={},
     runtime_hooks=[],
@@ -36,3 +43,4 @@ exe = EXE(
     codesign_identity=None,
     entitlements_file=None,
 )
+
