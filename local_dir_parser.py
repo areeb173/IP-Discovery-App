@@ -1,6 +1,7 @@
 import os
 import urllib.request
 import json
+import time
 
 SUPPORTED_EXTENSIONS = {
     ".py", ".js", ".ts", ".java", ".cs",
@@ -58,6 +59,46 @@ def is_invention_like(text):
     response = query_ollama(prompt)
     return response.lower().startswith('yes')
 
+def score_invention(text, matching_keywords):
+    prompt = f"""
+You are evaluating text for potential intellectual property.
+
+Return ONLY valid JSON in this format:
+{{
+  "score": 0,
+  "ip_type": "patent",
+  "summary": "short summary here",
+  "reasoning": "short reason here"
+}}
+
+Rules:
+- score must be an integer from 0 to 100
+- ip_type must be one of: patent, trade_secret, trademark, none
+- be conservative
+- if this does not look like real technical IP, use a low score and ip_type "none"
+
+Keywords found: {", ".join(matching_keywords)}
+
+Text:
+{text[:2000]}
+"""
+    response = query_ollama(prompt)
+
+    try:
+        start = response.find("{")
+        end = response.rfind("}") + 1
+        if start != -1 and end != -1:
+            return json.loads(response[start:end])
+    except Exception as e:
+        print(f"Error parsing score response: {e}")
+
+    return {
+        "score": 0,
+        "ip_type": "none",
+        "summary": "Could not parse model response",
+        "reasoning": "Invalid JSON from Ollama"
+    }
+
 # read and return contents of a file, ignoring errors
 def extract_text_from_file(file_path):
     try:
@@ -71,15 +112,23 @@ def extract_text_from_file(file_path):
 def check_for_potential_ip(text, keywords):
     text_lower = text.lower()
     matching_keywords = [kw for kw in keywords if kw in text_lower]
+
     if matching_keywords:
-        # extract snippet around first keyword match for more efficient LLM evaluation
         first_kw = matching_keywords[0]
         kw_pos = text_lower.find(first_kw)
+
         start = max(0, kw_pos - 150)
         snippet = text[start:start + 300]
+
         if is_invention_like(snippet):
-            return matching_keywords
-    return []
+            score_data = score_invention(snippet, matching_keywords)
+            return {
+                "keywords": matching_keywords,
+                "snippet": snippet,
+                "score_data": score_data
+            }
+
+    return None
 
 # walk through directory tree, analyze each supported file
 def scan_local_directory(scan_path, keywords):
@@ -88,6 +137,7 @@ def scan_local_directory(scan_path, keywords):
     potential_ip_files = []
 
     print(f"\nScanning directory: {scan_path}\n")
+    start_time = time.time()
 
     for root, dirs, files in os.walk(scan_path):
         for file in files:
@@ -109,22 +159,50 @@ def scan_local_directory(scan_path, keywords):
 
                 if text.strip():
                     parsed_files += 1
-
                     print(f"Parsed: {file_path}")
 
-                    matching_keywords = check_for_potential_ip(text, keywords)
-                    if matching_keywords:
-                        print(f"Potential IP found! Matching keywords: {', '.join(matching_keywords)}")
-                        potential_ip_files.append((file_path, matching_keywords))
-                    print()
+                    result = check_for_potential_ip(text, keywords)
+
+                    if result:
+                        print("Potential IP found!")
+                        print(f"Matching keywords: {', '.join(result['keywords'])}")
+                        print(f"Score: {result['score_data'].get('score', 0)}")
+                        print(f"Type: {result['score_data'].get('ip_type', 'none')}")
+                        print(f"Summary: {result['score_data'].get('summary', '')}")
+                        print()
+
+                        potential_ip_files.append({
+                            "file_path": file_path,
+                            "keywords": result["keywords"],
+                            "snippet": result["snippet"],
+                            "score": result["score_data"].get("score", 0),
+                            "ip_type": result["score_data"].get("ip_type", "none"),
+                            "summary": result["score_data"].get("summary", ""),
+                            "reasoning": result["score_data"].get("reasoning", "")
+                        })
 
     print(f"Total Parsed Files: {parsed_files}")
     print(f"Skipped Large Files: {skipped_large_files}")
     print(f"Potential IP Files: {len(potential_ip_files)}")
+
+    end_time = time.time()
+    total_time = end_time - start_time
+
+    print(f"\nTotal runtime: {total_time:.2f} seconds")
+
+    if parsed_files > 0:
+        avg_time = total_time / parsed_files
+        print(f"Average time per file: {avg_time:.4f} seconds")
+
     if potential_ip_files:
         print("\nPotential IP Files:")
-        for file_path, keywords in potential_ip_files:
-            print(f"- {file_path}: {', '.join(keywords)}")
+        for item in potential_ip_files:
+            print(f"- {item['file_path']}")
+            print(f"  Keywords: {', '.join(item['keywords'])}")
+            print(f"  Score: {item['score']}")
+            print(f"  Type: {item['ip_type']}")
+            print(f"  Summary: {item['summary']}")
+            print()
 
 def main():
     keywords = load_keywords()
