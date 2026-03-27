@@ -1,11 +1,21 @@
-from flask import Flask, request, jsonify
+from flask import Flask, request, jsonify, send_from_directory
 from flask_cors import CORS
 import os
+import sys
 import urllib.request
 import json
 import threading
+import webbrowser
 
-app = Flask(__name__)
+# Determine base path — works both in dev and when frozen by PyInstaller
+if getattr(sys, 'frozen', False):
+    BASE_DIR = sys._MEIPASS
+else:
+    BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+FRONTEND_DIST = os.path.join(BASE_DIR, "frontend", "dist")
+
+app = Flask(__name__, static_folder=FRONTEND_DIST, static_url_path="")
 CORS(app, supports_credentials=True, resources={r"/api/*": {
     "origins": "*",
     "methods": ["GET", "POST", "OPTIONS"],
@@ -20,7 +30,7 @@ SUPPORTED_EXTENSIONS = {
 
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
-KEYWORDS_FILE = "keywords.txt"
+KEYWORDS_FILE = os.path.join(BASE_DIR, "keywords.txt")
 OLLAMA_URL = "http://localhost:11434/api/generate"
 
 scan_progress = {}  # track progress per scan_id
@@ -201,5 +211,16 @@ def health():
     return jsonify({"status": "ok"})
 
 
+# Serve React frontend for all non-API routes
+@app.route("/", defaults={"path": ""})
+@app.route("/<path:path>")
+def serve_frontend(path):
+    if path and os.path.exists(os.path.join(FRONTEND_DIST, path)):
+        return send_from_directory(FRONTEND_DIST, path)
+    return send_from_directory(FRONTEND_DIST, "index.html")
+
+
 if __name__ == "__main__":
-    app.run(port=5000, debug=True)
+    # Auto-open browser after short delay
+    threading.Timer(1.5, lambda: webbrowser.open("http://localhost:5000")).start()
+    app.run(port=5000, debug=False)

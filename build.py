@@ -105,7 +105,7 @@ def main():
 
     # Step 3: Create installer with InnoSetup
     print("\n[3/3] Creating installer with InnoSetup...")
-    if not run_command("iscc.exe /Q installer.iss", "InnoSetup"):
+    if not run_command('"C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe" /Q installer.iss', "InnoSetup"):
         return False
     print("[OK] Installer created")
 

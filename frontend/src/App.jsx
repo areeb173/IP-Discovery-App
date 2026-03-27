@@ -138,7 +138,7 @@ export default function App() {
             <div className="stats-row">
               <div className="stat">
                 <span className="stat-num">{parsedCount}</span>
-                <span className="stat-label">Files Parsed</span>
+                <span className="stat-label">Files Found</span>
               </div>
               <div className="stat">
                 <span className="stat-num">{log.filter(l => l.includes("✓")).length}</span>
