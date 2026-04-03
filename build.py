@@ -97,7 +97,7 @@ def main():
     # Step 2: Build backend executable with PyInstaller
     print("\n[2/3] Building backend executable with PyInstaller...")
     if not run_command(
-        f'{sys.executable} -m PyInstaller IPFinder.spec',
+        f'"{sys.executable}" -m PyInstaller IPFinder.spec',
         "PyInstaller"
     ):
         return False
