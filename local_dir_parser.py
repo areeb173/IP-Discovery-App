@@ -9,6 +9,14 @@ SUPPORTED_EXTENSIONS = {
     ".yaml", ".yml"
 }
 
+CONCEPTS = [
+    "performance optimization reducing latency improving speed",
+    "encryption security cryptographic data protection",
+    "distributed systems coordination synchronization mesh networks",
+    "machine learning prediction heuristics automation",
+    "virtualization containerization virtual machines hypervisors"
+]
+
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 mb can be lowered/increased
 
 KEYWORDS_FILE = "keywords.txt"
@@ -111,19 +119,25 @@ def extract_text_from_file(file_path):
 # determine if text contains keywords and is judged invention-like
 def check_for_potential_ip(text, keywords):
     text_lower = text.lower()
-    matching_keywords = [kw for kw in keywords if kw in text_lower]
 
-    if matching_keywords:
-        first_kw = matching_keywords[0]
-        kw_pos = text_lower.find(first_kw)
+    # simple semantic-ish match: count overlap with concepts
+    best_score = 0
+    best_concept = None
 
-        start = max(0, kw_pos - 150)
-        snippet = text[start:start + 300]
+    for concept in CONCEPTS:
+        score = sum(1 for word in concept.split() if word in text_lower)
+        if score > best_score:
+            best_score = score
+            best_concept = concept
 
-        if is_invention_like(snippet):
-            score_data = score_invention(snippet, matching_keywords)
+    if best_score >= 2:
+        snippet = text[:1500]
+
+        score_data = score_invention(snippet, [best_concept])
+
+        if score_data.get("score", 0) > 20:
             return {
-                "keywords": matching_keywords,
+                "keywords": [best_concept],
                 "snippet": snippet,
                 "score_data": score_data
             }
@@ -141,6 +155,8 @@ def scan_local_directory(scan_path, keywords):
 
     for root, dirs, files in os.walk(scan_path):
         for file in files:
+            if "keywords" in file.lower():
+                continue
             ext = os.path.splitext(file)[1].lower()
             file_path = os.path.join(root, file)
 
