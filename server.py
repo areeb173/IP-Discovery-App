@@ -5,7 +5,7 @@ import sys
 import urllib.request
 import json
 import threading
-import webbrowser
+import uuid
 
 # Determine base path — works both in dev and when frozen by PyInstaller
 if getattr(sys, 'frozen', False):
@@ -31,6 +31,7 @@ SUPPORTED_EXTENSIONS = {
 MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
 
 KEYWORDS_FILE = os.path.join(BASE_DIR, "keywords.txt")
+REJECTED_FILE = os.path.join(BASE_DIR, "rejected_files.txt")
 OLLAMA_URL = "http://localhost:11434/api/generate"
 
 scan_progress = {}  # track progress per scan_id
@@ -49,6 +50,26 @@ def load_keywords():
         print(f"Error loading keywords: {e}")
     return keywords
 
+def load_rejected():
+    rejected = set()
+    try:
+        if os.path.exists(REJECTED_FILE):
+            with open(REJECTED_FILE, "r", encoding="utf-8") as f:
+                for line in f:
+                    p = line.strip()
+                    if p:
+                        rejected.add(p)
+    except Exception as e:
+        print(f"Error loading rejected files: {e}")
+    return rejected
+
+def save_rejected(rejected):
+    try:
+        with open(REJECTED_FILE, "w", encoding="utf-8") as f:
+            for p in sorted(rejected):
+                f.write(p + "\n")
+    except Exception as e:
+        print(f"Error saving rejected files: {e}")
 
 def query_ollama(prompt):
     data = {
@@ -166,59 +187,91 @@ def run_scan(scan_id, scan_path, keywords):
 @app.route("/api/scan", methods=["OPTIONS"])
 def scan_preflight():
     return "", 204
-
-
+ 
+ 
 @app.route("/api/scan", methods=["POST"])
 def start_scan():
-    """Start a scan — returns a scan_id to poll for progress."""
     data = request.get_json()
     scan_path = data.get("path", "").strip()
-
+ 
     if not scan_path:
         return jsonify({"error": "No path provided"}), 400
     if not os.path.exists(scan_path):
         return jsonify({"error": "Directory does not exist"}), 400
     if not os.path.isdir(scan_path):
         return jsonify({"error": "Path is not a directory"}), 400
-
+ 
     keywords = load_keywords()
     if not keywords:
         return jsonify({"error": "No keywords loaded. Check keywords.txt"}), 500
-
-    import uuid
+ 
+    rejected = load_rejected()
     scan_id = str(uuid.uuid4())
-
-    thread = threading.Thread(target=run_scan, args=(scan_id, scan_path, keywords), daemon=True)
+ 
+    thread = threading.Thread(target=run_scan, args=(scan_id, scan_path, keywords, rejected), daemon=True)
     thread.start()
-
+ 
     return jsonify({"scan_id": scan_id})
-
-
+ 
+ 
 @app.route("/api/scan/<scan_id>", methods=["GET"])
 def get_scan_status(scan_id):
-    """Poll this endpoint to get scan progress and results."""
     with scan_lock:
         progress = scan_progress.get(scan_id)
-
+ 
     if progress is None:
         return jsonify({"error": "Scan not found"}), 404
-
+ 
     return jsonify(progress)
-
-
+ 
+ 
+@app.route("/api/reject", methods=["POST"])
+def reject_file():
+    data = request.get_json()
+    file_path = data.get("file_path", "").strip()
+ 
+    if not file_path:
+        return jsonify({"error": "No file path provided"}), 400
+ 
+    rejected = load_rejected()
+    rejected.add(file_path)
+    save_rejected(rejected)
+ 
+    return jsonify({"success": True, "rejected": file_path})
+ 
+ 
+@app.route("/api/reject", methods=["GET"])
+def get_rejected():
+    rejected = load_rejected()
+    return jsonify({"rejected": sorted(list(rejected))})
+ 
+ 
+@app.route("/api/reject", methods=["DELETE"])
+def unreject_file():
+    data = request.get_json()
+    file_path = data.get("file_path", "").strip()
+ 
+    if not file_path:
+        return jsonify({"error": "No file path provided"}), 400
+ 
+    rejected = load_rejected()
+    rejected.discard(file_path)
+    save_rejected(rejected)
+ 
+    return jsonify({"success": True, "unrejected": file_path})
+ 
+ 
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
-
-
-# Serve React frontend for all non-API routes
+ 
+ 
 @app.route("/", defaults={"path": ""})
 @app.route("/<path:path>")
 def serve_frontend(path):
     if path and os.path.exists(os.path.join(FRONTEND_DIST, path)):
         return send_from_directory(FRONTEND_DIST, path)
     return send_from_directory(FRONTEND_DIST, "index.html")
-
 
 if __name__ == "__main__":
     # Auto-open browser after short delay

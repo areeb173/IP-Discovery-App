@@ -6,14 +6,30 @@ const API_BASE = "http://localhost:5000"
 export default function App() {
   const [path, setPath] = useState("")
   const [scanId, setScanId] = useState(null)
-  const [status, setStatus] = useState("idle") // idle | running | complete | error
+  const [status, setStatus] = useState("idle")
   const [results, setResults] = useState(null)
   const [log, setLog] = useState([])
   const [currentFile, setCurrentFile] = useState("")
   const [parsedCount, setParsedCount] = useState(0)
   const [error, setError] = useState("")
+  const [rejectedFiles, setRejectedFiles] = useState([])
+  const [showRejected, setShowRejected] = useState(false)
+  const [dismissedInSession, setDismissedInSession] = useState(new Set())
   const logEndRef = useRef(null)
   const pollRef = useRef(null)
+
+  // Load rejected files on mount
+  useEffect(() => {
+    fetchRejected()
+  }, [])
+
+  const fetchRejected = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/api/reject`)
+      const data = await res.json()
+      setRejectedFiles(data.rejected || [])
+    } catch (e) {}
+  }
 
   // Auto-scroll log
   useEffect(() => {
@@ -53,6 +69,7 @@ export default function App() {
     setResults(null)
     setCurrentFile("")
     setParsedCount(0)
+    setDismissedInSession(new Set())
     setStatus("running")
 
     try {
@@ -74,6 +91,29 @@ export default function App() {
     }
   }
 
+  const rejectFile = async (filePath) => {
+    try {
+      await fetch(`${API_BASE}/api/reject`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_path: filePath })
+      })
+      setDismissedInSession(prev => new Set([...prev, filePath]))
+      setRejectedFiles(prev => [...prev, filePath].sort())
+    } catch (e) {}
+  }
+
+  const unrejectFile = async (filePath) => {
+    try {
+      await fetch(`${API_BASE}/api/reject`, {
+        method: "DELETE",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ file_path: filePath })
+      })
+      setRejectedFiles(prev => prev.filter(f => f !== filePath))
+    } catch (e) {}
+  }
+
   const reset = () => {
     setPath("")
     setScanId(null)
@@ -83,19 +123,50 @@ export default function App() {
     setCurrentFile("")
     setParsedCount(0)
     setError("")
+    setDismissedInSession(new Set())
   }
+
+  const visibleResults = results?.potential_ip_files.filter(
+    item => !dismissedInSession.has(item.file_path)
+  ) || []
 
   return (
     <div className="app">
       <header className="header">
         <div className="header-inner">
-          <div className="logo-mark">FCG</div>
+          <div className="logo-mark">IPF</div>
           <div>
             <h1 className="title">IP Finder</h1>
             <p className="subtitle">Automatic Patent Discovery</p>
           </div>
+          <button
+            className="btn-ghost rejected-toggle"
+            onClick={() => setShowRejected(!showRejected)}
+          >
+            Rejected Files {rejectedFiles.length > 0 && <span className="badge">{rejectedFiles.length}</span>}
+          </button>
         </div>
       </header>
+
+      {showRejected && (
+        <div className="rejected-panel">
+          <div className="rejected-panel-inner">
+            <h3 className="section-title">Rejected Files</h3>
+            {rejectedFiles.length === 0 ? (
+              <p className="muted">No files rejected yet. Files you reject from scan results will appear here and be skipped in future scans.</p>
+            ) : (
+              <div className="rejected-list">
+                {rejectedFiles.map((f, i) => (
+                  <div key={i} className="rejected-row">
+                    <span className="rejected-path">{f}</span>
+                    <button className="btn-unreject" onClick={() => unrejectFile(f)}>Restore</button>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        </div>
+      )}
 
       <main className="main">
         {status === "idle" && (
@@ -109,7 +180,7 @@ export default function App() {
               <input
                 className="path-input"
                 type="text"
-                placeholder="e.g. C:\Users\Username\Projects\\my-app"
+                placeholder="e.g. C:\Users\Documents\Projects\my-app"
                 value={path}
                 onChange={e => setPath(e.target.value)}
                 onKeyDown={e => e.key === "Enter" && startScan()}
@@ -138,11 +209,11 @@ export default function App() {
             <div className="stats-row">
               <div className="stat">
                 <span className="stat-num">{parsedCount}</span>
-                <span className="stat-label">Files Found</span>
+                <span className="stat-label">Files Parsed</span>
               </div>
               <div className="stat">
                 <span className="stat-num">{log.filter(l => l.includes("✓")).length}</span>
-                <span className="stat-label">Candidates</span>
+                <span className="stat-label">IP Candidates</span>
               </div>
             </div>
             <div className="log-box">
@@ -170,23 +241,32 @@ export default function App() {
                   <span className="stat-label">Skipped (too large)</span>
                 </div>
                 <div className="stat highlight">
-                  <span className="stat-num">{results.potential_ip_files.length}</span>
+                  <span className="stat-num">{visibleResults.length}</span>
                   <span className="stat-label">IP Candidates</span>
                 </div>
               </div>
               <button className="btn-secondary" onClick={reset}>New Scan</button>
             </div>
 
-            {results.potential_ip_files.length === 0 ? (
+            {visibleResults.length === 0 ? (
               <div className="card empty-state">
                 <p>No potential IP found in this directory.</p>
               </div>
             ) : (
               <div className="ip-list">
                 <h3 className="section-title">Potential IP Files</h3>
-                {results.potential_ip_files.map((item, i) => (
+                {visibleResults.map((item, i) => (
                   <div key={i} className="ip-card card">
-                    <div className="ip-path">{item.file_path}</div>
+                    <div className="ip-card-header">
+                      <div className="ip-path">{item.file_path}</div>
+                      <button
+                        className="btn-reject"
+                        onClick={() => rejectFile(item.file_path)}
+                        title="Reject this file — it will be skipped in future scans"
+                      >
+                        Not IP
+                      </button>
+                    </div>
                     <div className="keyword-row">
                       {item.keywords.map(kw => (
                         <span key={kw} className="kw-tag">{kw}</span>
