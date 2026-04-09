@@ -72,13 +72,14 @@ def main():
 
     # Clean old builds
     print("\nCleaning old builds...")
-    for folder in ["build", "dist"]:
+    for folder in ["dist", os.path.join("build", "electron")]:
         if os.path.exists(folder):
             shutil.rmtree(folder)
 
     # Step 1: Build React frontend
-    print("\n[1/3] Building React frontend...")
+    print("\n[1/4] Building React frontend...")
     frontend_dir = os.path.join(os.path.dirname(__file__), "frontend")
+    electron_dir = os.path.join(os.path.dirname(__file__), "electron")
     if not os.path.exists(frontend_dir):
         print("ERROR: frontend/ directory not found")
         return False
@@ -95,7 +96,7 @@ def main():
     print("[OK] Frontend built")
 
     # Step 2: Build backend executable with PyInstaller
-    print("\n[2/3] Building backend executable with PyInstaller...")
+    print("\n[2/4] Building backend executable with PyInstaller...")
     if not run_command(
         f'"{sys.executable}" -m PyInstaller IPFinder.spec',
         "PyInstaller"
@@ -103,8 +104,16 @@ def main():
         return False
     print("[OK] Backend executable built")
 
-    # Step 3: Create installer with InnoSetup
-    print("\n[3/3] Creating installer with InnoSetup...")
+    # Step 3: Build Electron app 
+    print("\n[3/4] Building Electron app...")
+    if not run_command("npm install", "Installing Electron dependencies", cwd=electron_dir):
+        return False    
+    if not run_command("npm run build", "Building Electron app", cwd=electron_dir):
+        return False
+    print("[OK] Electron app built")
+
+    # Step 4: Create installer with InnoSetup
+    print("\n[4/4] Creating installer with InnoSetup...")
     if not run_command('"C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe" /Q installer.iss', "InnoSetup"):
         return False
     print("[OK] Installer created")

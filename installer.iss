@@ -12,8 +12,8 @@ OutputDir=build
 OutputBaseFilename=IPFinder-Setup
 Compression=lzma
 SolidCompression=yes
-ArchitecturesInstallIn64BitMode=x64 arm64
-ArchitecturesAllowed=x64 arm64 x86
+ArchitecturesInstallIn64BitMode=x64 
+ArchitecturesAllowed=x64 
 MinVersion=0,6.1
 WizardStyle=modern
 
@@ -24,20 +24,15 @@ Name: "english"; MessagesFile: "compiler:Default.isl"
 Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{cm:AdditionalIcons}"; Flags: unchecked
 
 [Files]
-; Main executable (Flask backend)
-Source: "dist\IPFinder.exe"; DestDir: "{app}"; Flags: ignoreversion
-; Keywords file
-Source: "keywords.txt"; DestDir: "{app}"; Flags: ignoreversion
-; React frontend static files
-Source: "frontend\dist\*"; DestDir: "{app}\frontend\dist"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "build\electron\win-unpacked\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
 
 [Icons]
-Name: "{group}\IP Finder"; Filename: "{app}\IPFinder.exe"
+Name: "{group}\IP Finder"; Filename: "{app}\IP Finder.exe"
 Name: "{group}\{cm:UninstallProgram,IP Finder}"; Filename: "{uninstallexe}"
-Name: "{commondesktop}\IP Finder"; Filename: "{app}\IPFinder.exe"; Tasks: desktopicon
+Name: "{commondesktop}\IP Finder"; Filename: "{app}\IP Finder.exe"; Tasks: desktopicon
 
 [Run]
-Filename: "{app}\IPFinder.exe"; Description: "{cm:LaunchProgram,IP Finder}"; Flags: nowait postinstall skipifsilent
+Filename: "{app}\IP Finder.exe"; Description: "{cm:LaunchProgram,IP Finder}"; Flags: nowait postinstall skipifsilent
 
 [Registry]
 Root: HKCU; Subkey: "Software\IPFinder"; Flags: uninsdeletekey

@@ -222,5 +222,4 @@ def serve_frontend(path):
 
 if __name__ == "__main__":
     # Auto-open browser after short delay
-    threading.Timer(1.5, lambda: webbrowser.open("http://localhost:5000")).start()
-    app.run(port=5000, debug=False)
+    app.run(port=5000, debug=False, use_reloader=False)
