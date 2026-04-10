@@ -1,0 +1,27 @@
+optimization
+reducing
+latency
+synchronization
+coordinating
+compression
+decompression
+encryption
+decryption
+cryptographic
+API
+automating 
+automated
+parsing
+predicting
+heuristics
+machine learning
+distributed
+mesh networks
+virtualization
+containerization
+hypervisors
+virtual machines
+-------------------
+analyze
+
+

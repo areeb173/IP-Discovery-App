@@ -1,0 +1,28 @@
+# Build output
+build/
+dist/
+IPFinder/
+*.spec
+
+# PyInstaller
+__pycache__/
+*.py[cod]
+*.pyo
+
+# Frontend build output and deps
+frontend/dist/
+frontend/node_modules/
+electron/node_modules/
+
+# Python env
+.venv/
+venv/
+*.egg-info/
+
+# Runtime files
+rejected_files.txt
+scan_debug.log
+
+# OS
+.DS_Store
+Thumbs.db
