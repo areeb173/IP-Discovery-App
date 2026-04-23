@@ -17,6 +17,7 @@ A tool for scanning local directories to identify files containing potential int
    python local_dir_parser.py
    ```
 3. When prompted, enter the path to the directory you want to scan (e.g., `C:\Users\YourName\code\my_project`)
+4. After the scan, the tool now auto-generates an IDD draft file: `idd_autofill.md`
 
 ### Files Needed
 
@@ -36,3 +37,10 @@ You only need these files to test:
    - Sends the snippet to Ollama with the prompt: "Does this text describe an invention or patentable idea? Answer only 'yes' or 'no'."
    - Flags the file if Ollama responds with "yes"
 4. Reports files with potential IP matches
+5. **3.1 Complete IDD template**: Uses the LLM to auto-fill a draft IDD document based on scan results, including:
+   - Problem statement
+   - Proposed solution
+   - Novelty points
+   - Potential claims (draft)
+   - Risks and next steps
+   - Evidence summary from top scored files
