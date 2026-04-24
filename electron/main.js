@@ -9,10 +9,8 @@ let flaskProcess
 // Find the Flask backend executable
 function getFlaskPath() {
   if (app.isPackaged) {
-    // In production: flask exe is next to the electron app
     return path.join(process.resourcesPath, 'backend', 'IPFinder.exe')
   } else {
-    // In development: run python server.py from project root
     return null
   }
 }
@@ -35,17 +33,15 @@ function startFlask() {
   const flaskPath = getFlaskPath()
 
   if (flaskPath) {
-    // Production: launch the compiled Flask exe
     flaskProcess = spawn(flaskPath, [], {
       cwd: path.dirname(flaskPath),
-      windowsHide: true  // hides the console window
+      windowsHide: true
     })
 
     flaskProcess.on('error', (err) => {
       console.error('Failed to start Flask:', err)
     })
   } else {
-    // Development: launch python server.py
     const projectRoot = path.join(__dirname, '..', '..')
     flaskProcess = spawn('python', ['server.py'], {
       cwd: projectRoot,
@@ -72,7 +68,6 @@ function createWindow() {
   // Load the React app from Flask
   mainWindow.loadURL('http://localhost:5000')
 
-  // Open external links in the default browser, not Electron
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
     shell.openExternal(url)
     return { action: 'deny' }

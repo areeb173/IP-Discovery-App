@@ -64,7 +64,7 @@ def main():
 
     # Check/install Flask deps
     print("Checking Flask dependencies...")
-    subprocess.run([sys.executable, "-m", "pip", "install", "flask", "flask-cors"], check=True)
+    subprocess.run([sys.executable, "-m", "pip", "install", "flask", "flask-cors", "fpdf2"], check=True)
 
     # Check InnoSetup
     if not check_tool("iscc.exe", "https://jrsoftware.org/isdl.php"):

@@ -448,6 +448,96 @@ body {
   font-weight: 600;
 }
 
+/* ── IDD generation ── */
+.results-actions {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+  margin-top: 16px;
+}
+
+.idd-generating {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  color: var(--text-muted);
+}
+
+.idd-ready {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
+.idd-ready-title {
+  font-size: 12px;
+  color: var(--text-muted);
+  max-width: 260px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.idd-error {
+  font-size: 13px;
+  color: var(--error);
+}
+
+/* ── Prior art panel ── */
+.prior-art-card {
+  margin-bottom: 16px;
+}
+
+.prior-art-note {
+  font-size: 13px;
+  color: var(--text-muted);
+  margin-bottom: 12px;
+}
+
+.prior-art-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.prior-art-row {
+  padding: 10px 12px;
+  background: var(--surface2);
+  border: 1px solid var(--border-soft);
+  border-radius: var(--radius-sm);
+}
+
+.prior-art-title {
+  font-size: 13px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 6px;
+}
+
+.prior-art-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.pa-tag {
+  font-size: 11px;
+  padding: 2px 8px;
+  border-radius: 10px;
+  background: var(--sky-light);
+  color: var(--text-muted);
+  border: 1px solid var(--border-soft);
+}
+
+.pa-tag.pa-status {
+  background: var(--sage-light);
+  color: var(--sage-dark);
+  font-weight: 500;
+}
+
 .rejected-panel {
   background: var(--blush-light);
   border-bottom: 1px solid var(--border);

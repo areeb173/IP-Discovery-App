@@ -1,4 +1,5 @@
 # -*- mode: python ; coding: utf-8 -*-
+from PyInstaller.utils.hooks import collect_data_files
 
 a = Analysis(
     ['server.py'],
@@ -7,12 +8,31 @@ a = Analysis(
     datas=[
         ('keywords.txt', '.'),
         ('frontend/dist', 'frontend/dist'),
+        ('.env', '.'),
+        *collect_data_files('fpdf'),   # fpdf2 font metrics and internal data
     ],
     hiddenimports=[
         'flask',
         'flask_cors',
-        'engineio',
         'uuid',
+        'idd_generator',
+        'fpdf',
+        'fpdf.fpdf',
+        'fpdf.output',
+        'fpdf.fonts',
+        'fpdf.drawing',
+        'fpdf.enums',
+        'fpdf.errors',
+        'fpdf.util',
+        'fpdf.deprecation',
+        'fpdf.image_datastructures',
+        'fpdf.image_parsing',
+        'fpdf.transitions',
+        'fpdf.outline',
+        'fpdf.svg',
+        'fpdf.table',
+        'defusedxml',
+        'PIL',
     ],
     hookspath=[],
     hooksconfig={},

@@ -1,17 +1,42 @@
-from flask import Flask, request, jsonify, send_from_directory
+from flask import Flask, request, jsonify, send_from_directory, Response
 from flask_cors import CORS
 import os
 import sys
 import urllib.request
+import urllib.parse
 import json
 import threading
 import uuid
+from idd_generator import generate_idd_sections, build_pdf
 
-# Determine base path — works both in dev and when frozen by PyInstaller
+# Ensure stdout/stderr always accept Unicode (LLM output may contain arrows, dashes etc.)
+# Without this, cp1252 terminals on Windows throw UnicodeEncodeError on non-latin chars.
+if hasattr(sys.stdout, 'reconfigure'):
+    try:
+        sys.stdout.reconfigure(encoding='utf-8', errors='replace')
+        sys.stderr.reconfigure(encoding='utf-8', errors='replace')
+    except Exception:
+        pass
+
+# Determine base path — works both in dev and when frozen by PyInstaller.
+# Must come first so .env loading and everything else uses the correct path.
 if getattr(sys, 'frozen', False):
     BASE_DIR = sys._MEIPASS
 else:
     BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+
+# Load .env if present (simple key=value, no external dependency needed)
+_env_path = os.path.join(BASE_DIR, ".env")
+if os.path.exists(_env_path):
+    with open(_env_path) as _f:
+        for _line in _f:
+            _line = _line.strip()
+            if _line and not _line.startswith("#") and "=" in _line:
+                _k, _v = _line.split("=", 1)
+                os.environ.setdefault(_k.strip(), _v.strip())
+
+USPTO_API_KEY = os.environ.get("USPTO_API_KEY", "")
+USPTO_SEARCH_URL = "https://api.uspto.gov/api/v1/patent/applications/search"
 
 FRONTEND_DIST = os.path.join(BASE_DIR, "frontend", "dist")
 
@@ -28,14 +53,15 @@ SUPPORTED_EXTENSIONS = {
     ".yaml", ".yml"
 }
 
-MAX_FILE_SIZE = 5 * 1024 * 1024  # 5 MB
+MAX_FILE_SIZE = 5 * 1024 * 1024
 
 KEYWORDS_FILE = os.path.join(BASE_DIR, "keywords.txt")
 REJECTED_FILE = os.path.join(BASE_DIR, "rejected_files.txt")
 OLLAMA_URL = "http://localhost:11434/api/generate"
 
-scan_progress = {}  # track progress per scan_id
+scan_progress = {}
 scan_lock = threading.Lock()
+idd_store = {}
 
 
 def load_keywords():
@@ -47,7 +73,10 @@ def load_keywords():
                 if word:
                     keywords.add(word)
     except Exception as e:
-        print(f"Error loading keywords: {e}")
+        try:
+            print(f"Error loading keywords: {e}")
+        except Exception:
+            pass
     return keywords
 
 def load_rejected():
@@ -60,7 +89,10 @@ def load_rejected():
                     if p:
                         rejected.add(p)
     except Exception as e:
-        print(f"Error loading rejected files: {e}")
+        try:
+            print(f"Error loading rejected files: {e}")
+        except Exception:
+            pass
     return rejected
 
 def save_rejected(rejected):
@@ -69,7 +101,10 @@ def save_rejected(rejected):
             for p in sorted(rejected):
                 f.write(p + "\n")
     except Exception as e:
-        print(f"Error saving rejected files: {e}")
+        try:
+            print(f"Error saving rejected files: {e}")
+        except Exception:
+            pass
 
 def query_ollama(prompt):
     data = {
@@ -87,7 +122,10 @@ def query_ollama(prompt):
             result = json.loads(response.read().decode("utf-8"))
             return result.get("response", "").strip()
     except Exception as e:
-        print(f"Error querying Ollama: {e}")
+        try:
+            print(f"Error querying Ollama: {e}")
+        except Exception:
+            pass
         return ""
 
 
@@ -153,15 +191,14 @@ def extract_best_snippet(text, matching_keywords, max_chars=2000):
     return text[start:end]
 
 
-MIN_KEYWORD_MATCHES = 1   # require at least this many distinct keyword hits before calling Ollama
-MIN_IP_SCORE = 40         # minimum score to flag a file as potential IP
+MIN_KEYWORD_MATCHES = 1
+MIN_IP_SCORE = 40
 
 
 def check_for_potential_ip(text, keywords):
     text_lower = text.lower()
     matching_keywords = [kw for kw in keywords if kw in text_lower]
 
-    # Require at least MIN_KEYWORD_MATCHES distinct matches to reduce false positives
     if len(matching_keywords) < MIN_KEYWORD_MATCHES:
         return None
 
@@ -190,7 +227,6 @@ def run_scan(scan_id, scan_path, keywords, rejected):
                 if ext not in SUPPORTED_EXTENSIONS:
                     continue
 
-                # Skip rejected files
                 if file_path in rejected:
                     continue
 
@@ -244,9 +280,6 @@ def run_scan(scan_id, scan_path, keywords, rejected):
                 "log": log
             }
     except Exception as e:
-        print(f"ERROR in scan thread {scan_id}: {e}", flush=True)
-        import traceback
-        traceback.print_exc()
         with scan_lock:
             scan_progress[scan_id] = {
                 "status": "complete",
@@ -282,7 +315,6 @@ def start_scan():
     rejected = load_rejected()
     scan_id = str(uuid.uuid4())
 
-    # Initialize progress BEFORE starting thread to avoid race condition
     with scan_lock:
         scan_progress[scan_id] = {
             "status": "running",
@@ -346,9 +378,169 @@ def unreject_file():
     return jsonify({"success": True, "unrejected": file_path})
  
  
+def _strip_non_ascii(text):
+    """Remove characters that cannot be ASCII-encoded (e.g. Unicode arrows like \u2192)."""
+    if not text:
+        return text
+    return text.encode("ascii", errors="ignore").decode("ascii")
+
+
+@app.route("/api/prior-art/search", methods=["POST"])
+def prior_art_search():
+    if not USPTO_API_KEY:
+        return jsonify({"error": "USPTO_API_KEY not configured"}), 500
+
+    data = request.get_json()
+    title = _strip_non_ascii(data.get("title", "").strip())
+    summary = _strip_non_ascii(data.get("summary", "").strip())
+    keywords = [_strip_non_ascii(k) for k in data.get("keywords", [])]
+
+    if not title and not keywords:
+        return jsonify({"error": "No title or keywords provided"}), 400
+
+    invention_context = f"Invention title: {title}"
+    if summary:
+        invention_context += f"\nSummary: {summary[:500]}"
+    if keywords:
+        invention_context += f"\nKey technical concepts: {', '.join(keywords[:8])}"
+
+    llm_query = ""
+    if title or summary:
+        prompt = (
+            f"{invention_context}\n\n"
+            "Generate a short (3-6 words) USPTO patent title search phrase that would find "
+            "prior art for this specific invention. Return ONLY the search phrase, nothing else. "
+            "Focus on the most distinctive technical aspect, not generic words like 'system' or 'method'."
+        )
+        llm_query = query_ollama(prompt).strip().strip('"').strip("'")
+        llm_query = llm_query.encode("ascii", errors="ignore").decode("ascii").strip()
+
+    if not llm_query or len(llm_query.split()) < 2:
+        llm_query = " ".join(title.split()[:5]) if title else " ".join(k.split()[0] for k in keywords[:4])
+
+    q = f"applicationMetaData.inventionTitle:({llm_query})"
+
+    fields = ",".join([
+        "applicationMetaData.inventionTitle",
+        "applicationMetaData.applicationNumberText",
+        "applicationMetaData.applicationStatusDescriptionText",
+        "applicationMetaData.filingDate",
+        "applicationMetaData.patentNumber",
+    ])
+
+    params = urllib.parse.urlencode({"q": q, "fields": fields, "limit": 10})
+    url = f"{USPTO_SEARCH_URL}?{params}"
+
+    try:
+        req = urllib.request.Request(
+            url,
+            headers={"x-api-key": USPTO_API_KEY, "Accept": "application/json"}
+        )
+        with urllib.request.urlopen(req, timeout=15) as resp:
+            raw = json.loads(resp.read().decode("utf-8"))
+
+        hits = raw.get("patentFileWrapperDataBag", [])
+        candidates = []
+        for h in hits:
+            meta = h.get("applicationMetaData", {})
+            candidates.append({
+                "title": meta.get("inventionTitle", "Unknown"),
+                "app_number": meta.get("applicationNumberText", ""),
+                "status": meta.get("applicationStatusDescriptionText", ""),
+                "filing_date": meta.get("filingDate", ""),
+                "patent_number": meta.get("patentNumber", ""),
+            })
+
+        filtered = _filter_relevant_patents(candidates, invention_context)
+        return jsonify({"results": filtered, "query": llm_query})
+
+    except urllib.error.HTTPError as e:
+        return jsonify({"error": f"USPTO API returned {e.code}"}), 502
+    except UnicodeEncodeError as e:
+        return jsonify({"error": f"Text encoding error: the invention title or summary contains unsupported characters (e.g. Unicode symbols). They have been stripped — please retry."}), 400
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+def _filter_relevant_patents(candidates, invention_context):
+    """
+    Ask the LLM which candidates from the USPTO results are actually related
+    to the invention. Returns the filtered list (preserving original dicts).
+    If the LLM call fails, returns all candidates unchanged.
+    """
+    if not candidates:
+        return candidates
+
+    titles_block = "\n".join(
+        f"{i+1}. {c['title']}" for i, c in enumerate(candidates)
+    )
+
+    prompt = (
+        f"{invention_context}\n\n"
+        f"Below are patent application titles retrieved from a USPTO search.\n"
+        f"List ONLY the numbers of patents that are genuinely related to the invention "
+        f"described above — meaning they cover similar technical territory and could "
+        f"represent prior art. If none are related, reply with: none\n\n"
+        f"Patent titles:\n{titles_block}\n\n"
+        f"Reply with a comma-separated list of numbers only, e.g.: 1, 3, 5"
+    )
+
+    response = query_ollama(prompt).strip().lower()
+
+    if "none" in response:
+        return []
+
+    # Parse out the numbers the LLM said are relevant
+    relevant_indices = set()
+    for token in response.replace(",", " ").split():
+        token = token.strip(".,;:()")
+        if token.isdigit():
+            idx = int(token) - 1  # convert 1-based to 0-based
+            if 0 <= idx < len(candidates):
+                relevant_indices.add(idx)
+
+    if not relevant_indices:
+        return candidates
+
+    return [candidates[i] for i in sorted(relevant_indices)]
+
+
 @app.route("/api/health", methods=["GET"])
 def health():
     return jsonify({"status": "ok"})
+
+
+@app.route("/api/idd/generate", methods=["POST"])
+def generate_idd():
+    data = request.get_json()
+    ip_files = data.get("ip_files", [])
+
+    if not ip_files:
+        return jsonify({"error": "No IP files provided"}), 400
+
+    try:
+        sections = generate_idd_sections(ip_files, query_ollama)
+        pdf_bytes = build_pdf(sections)
+        idd_id = str(uuid.uuid4())
+        idd_store[idd_id] = pdf_bytes
+        return jsonify({"idd_id": idd_id, "title": sections["title"], "summary": sections.get("summary", "")})
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
+
+
+@app.route("/api/idd/<idd_id>/pdf", methods=["GET"])
+def download_idd_pdf(idd_id):
+    pdf_bytes = idd_store.get(idd_id)
+    if not pdf_bytes:
+        return jsonify({"error": "IDD not found"}), 404
+
+    return Response(
+        pdf_bytes,
+        mimetype="application/pdf",
+        headers={
+            "Content-Disposition": f'attachment; filename="IDD_{idd_id[:8]}.pdf"'
+        },
+    )
  
  
 @app.route("/", defaults={"path": ""})
@@ -359,5 +551,4 @@ def serve_frontend(path):
     return send_from_directory(FRONTEND_DIST, "index.html")
 
 if __name__ == "__main__":
-    # Auto-open browser after short delay
     app.run(port=5000, debug=False, use_reloader=False)
