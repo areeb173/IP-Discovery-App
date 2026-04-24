@@ -19,6 +19,9 @@ electron/node_modules/
 venv/
 *.egg-info/
 
+# Secrets — do not commit
+.env
+
 # Runtime files
 rejected_files.txt
 scan_debug.log
