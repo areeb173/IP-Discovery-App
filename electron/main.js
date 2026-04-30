@@ -57,6 +57,7 @@ function createWindow() {
     minWidth: 800,
     minHeight: 600,
     title: 'IP Finder',
+    icon: path.join(__dirname, 'icon.ico'),
     webPreferences: {
       nodeIntegration: false,
       contextIsolation: true,
@@ -76,6 +77,8 @@ function createWindow() {
   mainWindow.on('closed', () => {
     mainWindow = null
   })
+
+  
 }
 
 app.whenReady().then(async () => {

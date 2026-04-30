@@ -7,6 +7,8 @@ import urllib.parse
 import json
 import threading
 import uuid
+import subprocess
+import time
 from idd_generator import generate_idd_sections, build_pdf
 
 # Ensure stdout/stderr always accept Unicode (LLM output may contain arrows, dashes etc.)
@@ -37,6 +39,54 @@ if os.path.exists(_env_path):
 
 USPTO_API_KEY = os.environ.get("USPTO_API_KEY", "")
 USPTO_SEARCH_URL = "https://api.uspto.gov/api/v1/patent/applications/search"
+
+def ensure_ollama_running():
+    """Start Ollama service if not already running."""
+    try:
+        urllib.request.urlopen("http://localhost:11434", timeout=3)
+        print("Ollama already running.")
+    except Exception:
+        print("Starting Ollama...")
+        try:
+            subprocess.Popen(
+                ["ollama", "serve"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                creationflags=subprocess.CREATE_NO_WINDOW if sys.platform == "win32" else 0
+            )
+            # Wait for Ollama to be ready
+            for _ in range(15):
+                time.sleep(1)
+                try:
+                    urllib.request.urlopen("http://localhost:11434", timeout=2)
+                    print("Ollama started.")
+                    return
+                except Exception:
+                    continue
+            print("Warning: Ollama may not have started correctly.")
+        except Exception as e:
+            print(f"Could not start Ollama: {e}")
+
+
+def ensure_ollama_model():
+    """Pull gemma3:4b if not already available."""
+    try:
+        result = subprocess.run(
+            ["ollama", "list"],
+            capture_output=True, text=True, timeout=10
+        )
+        if "gemma3:4b" not in result.stdout:
+            print("Pulling gemma3:4b model (this may take a few minutes)...")
+            subprocess.run(
+                ["ollama", "pull", "gemma3:4b"],
+                timeout=600
+            )
+            print("Model ready.")
+        else:
+            print("gemma3:4b model already available.")
+    except Exception as e:
+        print(f"Could not ensure Ollama model: {e}")
+
 
 FRONTEND_DIST = os.path.join(BASE_DIR, "frontend", "dist")
 
@@ -551,4 +601,6 @@ def serve_frontend(path):
     return send_from_directory(FRONTEND_DIST, "index.html")
 
 if __name__ == "__main__":
+    ensure_ollama_running()
+    ensure_ollama_model()
     app.run(port=5000, debug=False, use_reloader=False)

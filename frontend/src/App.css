@@ -88,14 +88,14 @@ body {
 
 .title {
   font-family: var(--font-display);
-  font-size: 18px;
+  font-size: 22px;
   font-weight: 600;
   color: var(--text);
   letter-spacing: -0.01em;
 }
 
 .subtitle {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-muted);
   font-family: var(--font-body);
   font-weight: 400;
@@ -125,12 +125,12 @@ body {
 
 .scan-card {
   width: 100%;
-  max-width: 780px;
+  max-width: 900px;
 }
 
 .card-title {
   font-family: var(--font-display);
-  font-size: 22px;
+  font-size: 32px;
   font-weight: 600;
   letter-spacing: -0.02em;
   color: var(--text);
@@ -138,7 +138,7 @@ body {
 }
 
 .card-desc {
-  font-size: 14px;
+  font-size: 18px;
   color: var(--text-muted);
   line-height: 1.65;
   margin-bottom: 28px;
@@ -157,9 +157,9 @@ body {
   background: var(--surface2);
   border: 1.5px solid var(--border);
   border-radius: var(--radius-sm);
-  padding: 11px 16px;
+  padding: 13px 16px;
   font-family: var(--font-body);
-  font-size: 13px;
+  font-size: 15px;
   color: var(--text);
   outline: none;
   transition: border-color 0.2s, box-shadow 0.2s;
@@ -180,10 +180,10 @@ body {
   color: white;
   border: none;
   border-radius: var(--radius-sm);
-  padding: 11px 24px;
+  padding: 13px 28px;
   font-family: var(--font-body);
   font-weight: 500;
-  font-size: 14px;
+  font-size: 16px;
   cursor: pointer;
   transition: background 0.2s, transform 0.1s;
   white-space: nowrap;
@@ -218,13 +218,13 @@ body {
 }
 
 .label {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-muted);
   font-weight: 500;
 }
 
 .ext-tag {
-  font-size: 11px;
+  font-size: 13px;
   color: var(--text-muted);
   background: var(--surface2);
   border: 1px solid var(--border-soft);
@@ -275,7 +275,7 @@ body {
 
 .stat-num {
   font-family: var(--font-display);
-  font-size: 32px;
+  font-size: 44px;
   font-weight: 600;
   color: var(--text);
   line-height: 1;
@@ -285,7 +285,7 @@ body {
 .stat.highlight .stat-num { color: var(--sage-dark); }
 
 .stat-label {
-  font-size: 11px;
+  font-size: 14px;
   color: var(--text-muted);
   font-weight: 500;
   letter-spacing: 0.04em;
@@ -325,7 +325,7 @@ body {
 
 .section-title {
   font-family: var(--font-display);
-  font-size: 13px;
+  font-size: 18px;
   font-weight: 600;
   letter-spacing: 0.06em;
   text-transform: uppercase;
@@ -353,7 +353,7 @@ body {
 }
 
 .ip-path {
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text);
   word-break: break-all;
   font-weight: 500;
@@ -370,7 +370,7 @@ body {
 }
 
 .ip-score {
-  font-size: 12px;
+  font-size: 15px;
   font-weight: 600;
   color: var(--text-muted);
 }
@@ -387,19 +387,19 @@ body {
 }
 
 .ip-summary {
-  font-size: 13px;
+  font-size: 16px;
   color: var(--text-muted);
   margin: 0 0 8px 0;
   line-height: 1.5;
 }
 
 .kw-tag {
-  font-size: 11px;
+  font-size: 14px;
   background: var(--sage-light);
   border: 1px solid rgba(143,171,148,0.3);
   color: var(--sage-dark);
   border-radius: 4px;
-  padding: 3px 9px;
+  padding: 5px 12px;
   font-weight: 500;
 }
 

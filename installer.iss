@@ -25,6 +25,7 @@ Name: "desktopicon"; Description: "{cm:CreateDesktopIcon}"; GroupDescription: "{
 
 [Files]
 Source: "build\electron\win-unpacked\*"; DestDir: "{app}"; Flags: ignoreversion recursesubdirs createallsubdirs
+Source: "OllamaSetup.exe"; DestDir: "{tmp}"; Flags: deleteafterinstall
 
 [Icons]
 Name: "{group}\IP Finder"; Filename: "{app}\IP Finder.exe"
@@ -32,6 +33,7 @@ Name: "{group}\{cm:UninstallProgram,IP Finder}"; Filename: "{uninstallexe}"
 Name: "{commondesktop}\IP Finder"; Filename: "{app}\IP Finder.exe"; Tasks: desktopicon
 
 [Run]
+Filename: "{tmp}\OllamaSetup.exe"; Parameters: "/S"; StatusMsg: "Installing Ollama (AI engine)..."; Flags: waituntilterminated; Check: not FileExists(ExpandConstant('{pf}\Ollama\ollama.exe'))
 Filename: "{app}\IP Finder.exe"; Description: "{cm:LaunchProgram,IP Finder}"; Flags: nowait postinstall skipifsilent
 
 [Registry]

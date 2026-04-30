@@ -1,7 +1,11 @@
 #!/usr/bin/env python3
 """
-Build script for IP Finder Installer
-Automates frontend build, PyInstaller, and InnoSetup
+Build script for IP Finder
+Steps:
+  1. Build React frontend (npm run build)
+  2. Build Flask backend exe (PyInstaller)
+  3. Build Electron GUI (electron-builder)
+  4. Package everything into MSI installer (WiX v3)
 """
 
 import os
@@ -9,29 +13,25 @@ import sys
 import subprocess
 import shutil
 
+WIX_BIN = r"C:\Program Files (x86)\WiX Toolset v3.14\bin"
+
 def run_command(cmd, description, cwd=None):
-    """Run a command and handle errors"""
     print(f"\n{description}...")
     try:
-        result = subprocess.run(cmd, shell=True, check=True, cwd=cwd)
+        subprocess.run(cmd, shell=True, check=True, cwd=cwd)
         return True
     except subprocess.CalledProcessError as e:
         print(f"ERROR: {description} failed with code {e.returncode}")
         return False
 
 def check_tool(tool_name, download_url=None):
-    """Check if a tool is installed"""
     result = subprocess.run(f"where {tool_name}", shell=True, capture_output=True)
     if result.returncode != 0:
-        if tool_name == "iscc.exe":
-            for path in [r"C:\Program Files (x86)\Inno Setup 6", r"C:\Program Files\Inno Setup 6"]:
-                if os.path.exists(os.path.join(path, "iscc.exe")):
-                    os.environ["PATH"] += f";{path}"
-                    print(f"[OK] {tool_name} found at {path}")
-                    return True
-        if tool_name == "npm":
-            print(f"ERROR: npm not found. Install Node.js from https://nodejs.org")
-            return False
+        if tool_name == "candle.exe" or tool_name == "light.exe":
+            if os.path.exists(os.path.join(WIX_BIN, tool_name)):
+                os.environ["PATH"] += f";{WIX_BIN}"
+                print(f"[OK] {tool_name} found at {WIX_BIN}")
+                return True
         print(f"ERROR: {tool_name} not found")
         if download_url:
             print(f"  Download: {download_url}")
@@ -41,87 +41,114 @@ def check_tool(tool_name, download_url=None):
 
 def main():
     print("\n" + "="*50)
-    print("IP Finder Installer Build")
+    print("IP Finder Full Build")
     print("="*50 + "\n")
+
+    root = os.path.dirname(os.path.abspath(__file__))
+    frontend_dir = os.path.join(root, "frontend")
+    electron_dir = os.path.join(root, "electron")
+    build_dir = os.path.join(root, "build")
+    electron_unpacked = os.path.join(build_dir, "electron", "win-unpacked")
 
     # Prerequisites
     print("Checking prerequisites...")
-
     if sys.version_info < (3, 7):
         print("ERROR: Python 3.7+ required")
         return False
-
-    # Check npm
     if not check_tool("npm"):
         return False
+    if not check_tool("candle.exe", "https://github.com/wixtoolset/wix3/releases"):
+        return False
+    if not check_tool("light.exe", "https://github.com/wixtoolset/wix3/releases"):
+        return False
 
-    # Check/install PyInstaller
     try:
         import PyInstaller
     except ImportError:
-        print("Installing PyInstaller...")
         subprocess.run([sys.executable, "-m", "pip", "install", "pyinstaller"], check=True)
 
-    # Check/install Flask deps
-    print("Checking Flask dependencies...")
     subprocess.run([sys.executable, "-m", "pip", "install", "flask", "flask-cors", "fpdf2"], check=True)
 
-    # Check InnoSetup
-    if not check_tool("iscc.exe", "https://jrsoftware.org/isdl.php"):
+    # Check OllamaSetup.exe exists
+    ollama_setup = os.path.join(root, "OllamaSetup.exe")
+    if not os.path.exists(ollama_setup):
+        print("ERROR: OllamaSetup.exe not found in project root.")
+        print("  Download from: https://ollama.com/download")
         return False
 
-    # Clean old builds
+    # Clean
     print("\nCleaning old builds...")
-    for folder in ["dist", os.path.join("build", "electron")]:
-        if os.path.exists(folder):
-            shutil.rmtree(folder)
+    for folder in ["dist", os.path.join("build", "electron"), os.path.join("build", "msi")]:
+        full = os.path.join(root, folder)
+        if os.path.exists(full):
+            shutil.rmtree(full)
 
-    # Step 1: Build React frontend
+    os.makedirs(os.path.join(build_dir, "msi"), exist_ok=True)
+
+    # Step 1: React frontend
     print("\n[1/4] Building React frontend...")
-    frontend_dir = os.path.join(os.path.dirname(__file__), "frontend")
-    electron_dir = os.path.join(os.path.dirname(__file__), "electron")
-    if not os.path.exists(frontend_dir):
-        print("ERROR: frontend/ directory not found")
+    if not run_command("npm install", "npm install", cwd=frontend_dir):
         return False
-
-    if not run_command("npm install", "Installing frontend dependencies", cwd=frontend_dir):
-        return False
-    if not run_command("npm run build", "Building React frontend", cwd=frontend_dir):
-        return False
-
-    frontend_dist = os.path.join(frontend_dir, "dist")
-    if not os.path.exists(frontend_dist):
-        print("ERROR: frontend/dist not found after build")
+    if not run_command("npm run build", "npm run build", cwd=frontend_dir):
         return False
     print("[OK] Frontend built")
 
-    # Step 2: Build backend executable with PyInstaller
-    print("\n[2/4] Building backend executable with PyInstaller...")
-    if not run_command(
-        f'"{sys.executable}" -m PyInstaller IPFinder.spec',
-        "PyInstaller"
-    ):
+    # Step 2: Flask backend exe
+    print("\n[2/4] Building Flask backend with PyInstaller...")
+    if not run_command(f"{sys.executable} -m PyInstaller IPFinder.spec", "PyInstaller", cwd=root):
         return False
-    print("[OK] Backend executable built")
+    print("[OK] Backend built -> dist/IPFinder.exe")
 
-    # Step 3: Build Electron app 
-    print("\n[3/4] Building Electron app...")
-    if not run_command("npm install", "Installing Electron dependencies", cwd=electron_dir):
-        return False    
-    if not run_command("npm run build", "Building Electron app", cwd=electron_dir):
+    # Step 3: Electron app
+    print("\n[3/4] Building Electron GUI...")
+    if not run_command("npm install", "npm install (electron)", cwd=electron_dir):
+        return False
+    if not run_command("npm run build", "electron-builder", cwd=electron_dir):
         return False
     print("[OK] Electron app built")
 
-    # Step 4: Create installer with InnoSetup
-    print("\n[4/4] Creating installer with InnoSetup...")
-    if not run_command('"C:\\Program Files (x86)\\Inno Setup 6\\ISCC.exe" /Q installer.iss', "InnoSetup"):
+    # Step 4: WiX MSI
+    print("\n[4/4] Creating MSI with WiX v3...")
+
+    # Harvest Electron files using heat.exe
+    heat_cmd = (
+        f'"{WIX_BIN}\\heat.exe" dir "{electron_unpacked}" '
+        f'-o build\\msi\\ElectronComponents.wxs '
+        f'-scom -frag -srd -sreg -gg -cg ElectronFiles '
+        f'-dr INSTALLFOLDER -var var.ElectronSource'
+    )
+    if not run_command(heat_cmd, "Harvesting Electron files", cwd=root):
         return False
-    print("[OK] Installer created")
+
+    # Compile installer.wxs
+    candle_cmd = (
+        f'"{WIX_BIN}\\candle.exe" '
+        f'-arch x64 '
+        f'-dElectronSource="{electron_unpacked}" '
+        f'installer.wxs build\\msi\\ElectronComponents.wxs '
+        f'-o build\\msi\\ '
+        f'-ext "{WIX_BIN}\\WixUIExtension.dll" '
+        f'-ext "{WIX_BIN}\\WixUtilExtension.dll"'
+    )
+    if not run_command(candle_cmd, "Compiling WiX sources", cwd=root):
+        return False
+
+    # Link into MSI
+    light_cmd = (
+        f'"{WIX_BIN}\\light.exe" '
+        f'build\\msi\\installer.wixobj build\\msi\\ElectronComponents.wixobj '
+        f'-o build\\IPFinder.msi '
+        f'-ext "{WIX_BIN}\\WixUIExtension.dll" '
+        f'-ext "{WIX_BIN}\\WixUtilExtension.dll" '
+        f'-cultures:en-us'
+    )
+    if not run_command(light_cmd, "Linking MSI", cwd=root):
+        return False
 
     print("\n" + "="*50)
     print("SUCCESS!")
     print("="*50)
-    print("\nInstaller: build\\IPFinder-Setup.exe")
+    print("\nInstaller: build\\IPFinder.msi\n")
     return True
 
 if __name__ == "__main__":

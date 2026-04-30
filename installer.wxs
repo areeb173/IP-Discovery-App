@@ -1,0 +1,112 @@
+<Wix xmlns="http://schemas.microsoft.com/wix/2006/wi"
+     xmlns:util="http://schemas.microsoft.com/wix/UtilExtension">
+
+  <Product
+    Id="*"
+    Name="IP Finder"
+    Language="1033"
+    Version="1.0.0"
+    Manufacturer="The Fellows Consulting Group"
+    UpgradeCode="12345678-1234-1234-1234-123456789012">
+
+    <Package
+      InstallerVersion="200"
+      Compressed="yes"
+      InstallScope="perMachine"
+      Description="IP Finder - Automatic Patent Discovery"
+      Manufacturer="The Fellows Consulting Group" />
+
+    <MajorUpgrade DowngradeErrorMessage="A newer version of IP Finder is already installed." />
+    <MediaTemplate EmbedCab="yes" />
+
+    <!-- UI -->
+    <UIRef Id="WixUI_InstallDir" />
+    <Property Id="WIXUI_INSTALLDIR" Value="INSTALLFOLDER" />
+
+    <!-- License (optional placeholder) -->
+    <!-- <WixVariable Id="WixUILicenseRtf" Value="License.rtf" /> -->
+
+    <Feature Id="ProductFeature" Title="IP Finder" Level="1">
+      <ComponentGroupRef Id="ProductComponents" />
+      <ComponentGroupRef Id = "ElectronFiles" />
+      <ComponentRef Id="ApplicationShortcutDesktop" />
+      <ComponentRef Id="ApplicationShortcutStartMenu" />
+    </Feature>
+
+    <!-- Install Ollama if not already installed -->
+    <Property Id="OLLAMA_INSTALLED" Secure="yes">
+     <DirectorySearch Id="OllamaDir" Path="[LocalAppDataFolder]Programs\Ollama" Depth="0">
+      <FileSearch Id="OllamaExe" Name="ollama.exe" />
+    </DirectorySearch>
+    </Property>
+
+    <CustomAction
+    Id="InstallOllama"
+    FileKey="InstallOllamaBat"
+    ExeCommand=""
+    Execute="deferred"
+    Impersonate="no"
+    Return="check" />
+
+
+    <InstallExecuteSequence>
+       <Custom Action="InstallOllama" Before="InstallFinalize">
+        NOT Installed
+      </Custom>
+    </InstallExecuteSequence>
+
+  </Product>
+
+  <Fragment>
+    <Directory Id="TARGETDIR" Name="SourceDir">
+      <Directory Id="ProgramFiles64Folder">
+        <Directory Id="INSTALLFOLDER" Name="IPFinder" />
+      </Directory>
+      <Directory Id="DesktopFolder" Name="Desktop" />
+      <Directory Id="ProgramMenuFolder">
+        <Directory Id="ApplicationProgramsFolder" Name="IP Finder" />
+      </Directory>
+    </Directory>
+  </Fragment>
+
+  <Fragment>
+    <ComponentGroup Id="ProductComponents" Directory="INSTALLFOLDER">
+
+      <!-- Ollama installer (bundled) -->
+      <Component Id="OllamaInstaller" Guid="A1B2C3D4-E5F6-7890-ABCD-EF1234567890" Win64="yes">
+        <File Id="OllamaSetup" Source="OllamaSetup.exe" KeyPath="yes" />
+        <File Id="InstallOllamaBat" Source="install_ollama.bat" />
+      </Component>
+
+      <!-- Electron app files are added dynamically by build.py using heat.exe -->
+      <!-- heat.exe harvests the win-unpacked folder into ElectronComponents.wxs -->
+
+    </ComponentGroup>
+
+    <!-- Desktop shortcut -->
+    <Component Id="ApplicationShortcutDesktop" Guid="B2C3D4E5-F6A7-8901-BCDE-F12345678901" Directory="DesktopFolder" Win64="yes">
+      <Shortcut
+        Id="DesktopShortcut"
+        Name="IP Finder"
+        Description="Automatic Patent Discovery"
+        Target="[INSTALLFOLDER]IP Finder.exe"
+        WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="DesktopFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\IPFinder" Name="installed" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+    <!-- Start menu shortcut -->
+    <Component Id="ApplicationShortcutStartMenu" Guid="C3D4E5F6-A7B8-9012-CDEF-123456789012" Directory="ApplicationProgramsFolder">
+      <Shortcut
+        Id="StartMenuShortcut"
+        Name="IP Finder"
+        Description="Automatic Patent Discovery"
+        Target="[INSTALLFOLDER]IP Finder.exe"
+        WorkingDirectory="INSTALLFOLDER" />
+      <RemoveFolder Id="ApplicationProgramsFolder" On="uninstall" />
+      <RegistryValue Root="HKCU" Key="Software\IPFinder" Name="startmenu" Type="integer" Value="1" KeyPath="yes" />
+    </Component>
+
+  </Fragment>
+
+</Wix>

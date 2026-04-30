@@ -25,11 +25,14 @@ a:hover {
 body {
   margin: 0;
   padding: 0;
+  background: #f5f2ee;
+  min-height: 100vh;
 }
 
 #root {
   width: 100%;
   min-height: 100vh;
+  background: #f5f2ee;
 }
 
 h1 {
